@@ -471,12 +471,12 @@ public class Robot extends TimedRobot
     }
     else if(joySpotter.getRawButton(7))
     {
-      // Yellow Cone Pipeline
+      // Cone Pipeline
       table.getEntry("pipeline").setNumber(CONE);
     }
     else if(joySpotter.getRawButton(6))
     {
-      // Blue Cube Pipeline
+      // Cube Pipeline
       table.getEntry("pipeline").setNumber(CUBE);
     }
     else // No Assigned Button/Axis
