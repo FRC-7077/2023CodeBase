@@ -14,7 +14,7 @@ import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.Solenoid;
 import edu.wpi.first.wpilibj.Compressor;
-//import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Joystick;
@@ -26,7 +26,7 @@ import edu.wpi.first.wpilibj.Servo;
 import com.revrobotics.CANSparkMax.IdleMode;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
-//import com.revrobotics.RelativeEncoder;
+import com.revrobotics.RelativeEncoder;
 
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
@@ -41,19 +41,19 @@ import edu.wpi.first.networktables.NetworkTableInstance;
  */
 public class Robot extends TimedRobot
 {
-  // Field Assignments
   // Motors
   private CANSparkMax leftMotor1 = new CANSparkMax(1, MotorType.kBrushless);
   private CANSparkMax leftMotor2 = new CANSparkMax(4, MotorType.kBrushless);
   private CANSparkMax rightMotor1 = new CANSparkMax(2, MotorType.kBrushless);
   private CANSparkMax rightMotor2 = new CANSparkMax(3, MotorType.kBrushless);
-  //private RelativeEncoder leftEncoder = leftMotor1.getEncoder();
-  //private RelativeEncoder righEncoder = rightMotor1.getEncoder();
+  private RelativeEncoder leftEncoder = leftMotor1.getEncoder();
+  private RelativeEncoder rightEncoder = rightMotor1.getEncoder();
+
   private DifferentialDrive myDrive;
 
   // Limit Switches
-  //private DigitalInput legLocked = new DigitalInput(0);
-  //private DigitalInput legUp = new DigitalInput(1);
+  private DigitalInput legLocked = new DigitalInput(0);
+  private DigitalInput objectAcquired = new DigitalInput(1);
 
   // Acceleration Curve
   // Two seconds worth of ticks at 20ms per tick is 100, 
@@ -74,10 +74,10 @@ public class Robot extends TimedRobot
   private Joystick joySpotter = new Joystick(1);
 
   // Controller Button and Axis Constants because I'm tire of looking them up
-      //private final int X_BUTTON = 1;
+  private final int X_BUTTON = 1;
   private final int A_BUTTON = 2;
   private final int B_BUTTON = 3;
-      //private final int Y_BUTTON = 4;
+  private final int Y_BUTTON = 4;
   private final int LB_BUTTON = 5;
   private final int RB_BUTTON = 6;
   private final int LT_BUTTON = 7;
@@ -96,7 +96,6 @@ public class Robot extends TimedRobot
   private final int CUBE = 1;
   private final int RETRO = 2;
   private final int TAGS_SCORE = 3;
-  private final int TAGS_LOAD = 4;
 
   // Servo Angle Constants
   private final double OPEN_ANGLE = 120.0;
@@ -107,6 +106,10 @@ public class Robot extends TimedRobot
   Solenoid grabberSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 7);
   Solenoid legSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 0);
   Servo valveServo = new Servo(0);
+  Servo slapReleaseServo = new Servo(1);
+  Servo legReleaseServo_1 = new Servo(2);
+  Servo legReleaseServo_2 = new Servo(3);
+  Servo camRotationServo = new Servo(4);
   
   // NetworkTables Global Variables for use with Limelight
   NetworkTable table = NetworkTableInstance.getDefault().getTable("limelight");
@@ -120,6 +123,12 @@ public class Robot extends TimedRobot
   // Auto-Aim and Auto-Balance Variables
   private double steering_adjust = 0.0;
   private double distance_adjust = 0.0;
+
+  // Compressor Enable/Disable variable
+  private boolean compressorState = true;
+
+  // Autonomous Stage Array
+  boolean[] stageComplete = {false, false, false, false, false};
 
   @Override
   public void robotInit() 
@@ -174,14 +183,49 @@ public class Robot extends TimedRobot
     // Show which Autonomous is Selected
     SmartDashboard.putString("Auto Selected", autoSelectionName);
 
-    // // Acceleration Curve Values
-    // SmartDashboard.putNumber("Curvature", acceleration_curvature);
-    // SmartDashboard.putNumber("Midpoint", acceleration_midpoint);
+    // Toggle for Compressor
+    compressorState = SmartDashboard.getBoolean("Compressor", compressorState);
 
-    // NavX Info 
-    SmartDashboard.putNumber("NavX Yaw", Math.floor(navX2.getYaw()));
-    SmartDashboard.putNumber("NavX Pitch", Math.floor(navX2.getPitch()));
-    SmartDashboard.putNumber("NavX Roll", Math.floor(navX2.getRoll()));
+    // I use the negation so that enabled is the fail state for safety purposes
+    if(!compressorState)
+    {
+      myCompressor.disable();
+    }
+    else
+    {
+      myCompressor.enableDigital();
+    }
+    SmartDashboard.putBoolean("Compressor", compressorState);
+
+    // Acceleration Curve Values
+    double curvature = SmartDashboard.getNumber("Curvature", acceleration_curvature);
+    double midpoint = SmartDashboard.getNumber("Midpoint", acceleration_midpoint);
+    boolean repopulate = false;
+
+    if(curvature != acceleration_curvature)
+    {
+      acceleration_curvature = curvature;
+      repopulate = true;
+    }
+    if(midpoint != acceleration_midpoint)
+    {
+      acceleration_midpoint = midpoint;
+      repopulate = true;
+    }
+    if(repopulate)
+    {
+      populateArrayList();
+    }
+
+    SmartDashboard.putNumber("Curvature", acceleration_curvature);
+    SmartDashboard.putNumber("Midpoint", acceleration_midpoint);
+
+
+    // For Testing Purposes
+    // // NavX Info 
+    // SmartDashboard.putNumber("NavX Yaw", Math.floor(navX2.getYaw()));
+    // SmartDashboard.putNumber("NavX Pitch", Math.floor(navX2.getPitch()));
+    // SmartDashboard.putNumber("NavX Roll", Math.floor(navX2.getRoll()));
     
     // // Limelight Info
     //   //read values periodically
@@ -201,58 +245,112 @@ public class Robot extends TimedRobot
   @Override
   public void autonomousPeriodic() 
   {
-    //Timer timer = new Timer();
+    //ALERT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // Still need to tune Encoder settings for all profiles
 
-    boolean[] stageComplete = {false, false, false, false, false};
-    int tagID = (int)table.getEntry("tid").getDouble(-1.0);
     if(autoSelectionName.equals("Easy"))
     {
-      
-      ///* Very Easy Mode
-      // 6-9 Point Auto Based partly on luck
-      // Find AprilTag
-      // Stage 0 - Drive to Position
-      // Stage 1 - Drop Cube off the back of the robot after bumping into the goal area
-      // OR: Stage 1 - Release launcher to slap cube up to top position
-      // Stage 2 - Back out of Community
-      if(!stageComplete[0] && tagID > -1)
+      // Very Easy Mode
+      // 6-9 Point Auto
+      if(!stageComplete[0])
       {
-        
+        // Score Piece (3-6pts)
+        slapReleaseServo.setAngle(OPEN_ANGLE);
+
+        // Drive out of Community (3pts)
+        leftEncoder.setPosition(10);  // NEEDS TUNING
+        stageComplete[0] = true;
+      }
+    }
+    else if(autoSelectionName.equals("Hard-Balance"))
+    {
+      // Hard Mode
+      // 18-21 Point Auto
+      if(!stageComplete[0])
+      {
+        // Score Piece (3-6pts)
+        slapReleaseServo.setAngle(OPEN_ANGLE);
+
+        // Drive out of community over charge station (3pts)
+        leftEncoder.setPosition(10);  // NEEDS TUNING
+        rightEncoder.setPosition(10);  // NEEDS TUNING
         stageComplete[0] = true;
       }
       else if(!stageComplete[1])
-      { 
-        
+      {
+        // Turn toward charge station
+        autoRotateToAngle(180);
         stageComplete[1] = true;
       }
       else if(!stageComplete[2])
       {
-
+        // Drive back to charge station
+        leftEncoder.setPosition(15);  // NEEDS TUNING
+        rightEncoder.setPosition(15);  // NEEDS TUNING
         stageComplete[2] = true;
       }
-      //*/
+      else if(!stageComplete[3])
+      {
+        // Balance (12pts)
+        balance();
+        updateMotorSetting(0.0, 0.0);
+      }
+
     }
-    else if(autoSelectionName.equals("Medium"))
+    else if(autoSelectionName.equals("Hard-Multiple"))
     {
-      /* Medium Mode
-      // 9 Point Auto
-      // Find AprilTag (1/3 or 6/8 Depending on Alliance)
-      //ws Drive to Position
-      // Drop Cube (Top Level - 6pts)
-      // Back out of Community (3pts)
-      */
-    }
-    else if(autoSelectionName.equals("Hard"))
-    {
-      /* Hard Mode
-      // 21 Point Auto
-      // Raise Leg
-      // Find AprilTag (2 or 7 Depending on Alliance)
-      // Drive to Position
-      // Drop Cube (Top Level - 6pts)
-      // Back out of community over charge station (3pts)
-      // Drive back to charge station and balance (12pts)
-      */
+      // Hard Mode - Points depend on score
+      
+      // Target and acquire cone
+      // Turn 180 Degrees
+      // Drive back to community and acquire Pole Node
+      // Drive and score second piece (6pts/3pts)
+      if(!stageComplete[0])
+      {
+        // Score First Piece (3-6pts)
+        slapReleaseServo.setAngle(OPEN_ANGLE);
+
+        // Drive out of community (3pts)
+        leftEncoder.setPosition(10);  // NEEDS TUNING
+        rightEncoder.setPosition(10);  // NEEDS TUNING
+        stageComplete[0] = true;
+      }
+      else if(!stageComplete[1])
+      {
+        // Target and acquire Cone
+        table.getEntry("pipeline").setNumber(CONE);
+        while(!objectAcquired.get())
+        {
+          autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
+          updateMotorSetting(0.0, 0.0);
+        }
+        grabberSolenoid.set(false);
+        stageComplete[1] = true;
+      }
+      else if(!stageComplete[2])
+      {
+        // Turn toward scoring area and approach
+        autoRotateToAngle(180);
+        leftEncoder.setPosition(15);  // NEEDS TUNING
+        rightEncoder.setPosition(15);  // NEEDS TUNING
+        stageComplete[2] = true;
+      }
+      else if(!stageComplete[3])
+      {
+        // Target and Acquire Cone Scoring pole
+        table.getEntry("pipeline").setNumber(RETRO);
+
+        while(Math.abs(txEntry.getDouble(0.0)) > 1 && 
+              Math.abs(tyEntry.getDouble(0.0)) > 1
+              )
+        {
+          autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
+          updateMotorSetting(0.0, 0.0);
+        }
+        grabberSolenoid.set(true);
+        stageComplete[3] = true;
+      }
+      
     }
     else if(autoSelectionName.equals("Dream"))
     {
@@ -268,20 +366,21 @@ public class Robot extends TimedRobot
   public void teleopPeriodic() 
   {
     joyDriver();
-    double left = 0.0;
-    double right = 0.0;
-    double desired_setpoint_left = steering_adjust + distance_adjust;
-    double desired_setpoint_right = -steering_adjust + distance_adjust;
+    updateMotorSetting(joyDriver.getRawAxis(UD_AXIS_LEFT_STICK), joyDriver.getRawAxis(UD_AXIS_RIGHT_STICK));
+    // double left = 0.0;
+    // double right = 0.0;
+    // double desired_setpoint_left = steering_adjust + distance_adjust;
+    // double desired_setpoint_right = -steering_adjust + distance_adjust;
 
-    // Get Desired Setpoints based on Stick 
-    desired_setpoint_left += (double)((int)(joyDriver.getRawAxis(UD_AXIS_LEFT_STICK)*10000))/10000;
-    desired_setpoint_right += (double)((int)(joyDriver.getRawAxis(UD_AXIS_RIGHT_STICK)*10000))/10000;
+    // // Get Desired Setpoints based on Stick 
+    // desired_setpoint_left += (double)((int)(joyDriver.getRawAxis(UD_AXIS_LEFT_STICK)*10000))/10000;
+    // desired_setpoint_right += (double)((int)(joyDriver.getRawAxis(UD_AXIS_RIGHT_STICK)*10000))/10000;
 
-    currentIndexLeft = updateMotorIndex(desired_setpoint_left, currentIndexLeft);
-    currentIndexRight = updateMotorIndex(desired_setpoint_right, currentIndexRight);
+    // currentIndexLeft = updateMotorIndex(desired_setpoint_left, currentIndexLeft);
+    // currentIndexRight = updateMotorIndex(desired_setpoint_right, currentIndexRight);
 
-    left = settingsList.get(currentIndexLeft);
-    right = settingsList.get(currentIndexRight);
+    // left = settingsList.get(currentIndexLeft);
+    // right = settingsList.get(currentIndexRight);
 
     // Test Output
     // SmartDashboard.putNumber("Setpoint Left", desired_setpoint_left);
@@ -293,9 +392,9 @@ public class Robot extends TimedRobot
     // SmartDashboard.putNumber("Output Right", rightMotor1.getAppliedOutput());
 
     // Set Motors to new speed and updates tracking variables...Always do this last
-    myDrive.tankDrive(left, right);
-    steering_adjust = 0.0;
-    distance_adjust = 0.0;
+    // myDrive.tankDrive(left, right);
+    // steering_adjust = 0.0;
+    // distance_adjust = 0.0;
   }
 
   public void autoAim(double tx, double ty)
@@ -319,9 +418,28 @@ public class Robot extends TimedRobot
     distance_adjust = KpDistance * distance_error;   
   }
 
+  public void autoRotateToAngle(double angle)
+  {
+    double currentYaw = navX2.getYaw();
+    double targetYaw = angle;
+    
+    while(currentYaw  < targetYaw - 5 || currentYaw > targetYaw + 5)
+    {
+      currentYaw = navX2.getYaw();
+      autoAim(targetYaw - currentYaw, 0.0);
+      updateMotorSetting(0.0, 0.0);
+    }
+  }
+
+  public void autoRotateByAngle(double angle)
+  {
+    navX2.reset();
+    autoRotateToAngle(angle);
+  }
+
   public void balance()
   {
-    double roll_error = navX2.getRoll();
+    double roll_error = -navX2.getRoll();
 
     // Set Adjustment for Yaw Direction
     distance_adjust = roll_error / 90;
@@ -380,6 +498,28 @@ public class Robot extends TimedRobot
 
   }
 
+  public void updateMotorSetting(double joyModX, double joyModY)
+  {
+    double left = 0.0;
+    double right = 0.0;
+    double desired_setpoint_left = steering_adjust + distance_adjust;
+    double desired_setpoint_right = -steering_adjust + distance_adjust;
+
+    // Get Desired Setpoints based on Stick 
+    desired_setpoint_left += (double)((int)(joyModX*10000))/10000;
+    desired_setpoint_right += (double)((int)(joyModY*10000))/10000;
+
+    currentIndexLeft = updateMotorIndex(desired_setpoint_left, currentIndexLeft);
+    currentIndexRight = updateMotorIndex(desired_setpoint_right, currentIndexRight);
+
+    left = settingsList.get(currentIndexLeft);
+    right = settingsList.get(currentIndexRight);
+    
+    myDrive.tankDrive(left, right);
+    steering_adjust = 0.0;
+    distance_adjust = 0.0;
+  }
+
   // The Driver is responsible for robot movement
   // Their joystick will control
   //   Drivetrain, Leg Raising/Lowering, Grabber Open/Close
@@ -395,6 +535,16 @@ public class Robot extends TimedRobot
     {
       // Automatically move robot to try and obtain ~0 Roll
       balance();
+    }
+    else if(joyDriver.getRawButton(X_BUTTON))
+    {
+      // This will automatically turn the robot 90 degrees CCW
+      autoRotateByAngle(90);
+    }
+    else if(joyDriver.getRawButton(Y_BUTTON))
+    {
+      // This will automatically turn the robot 90 degrees CCW
+      autoRotateByAngle(180);
     }
     else if(joyDriver.getRawButton(RT_BUTTON))
     {
@@ -442,22 +592,17 @@ public class Robot extends TimedRobot
     else if(joySpotter.getRawButton(3))
     {
       // Medium Auto Selection
-      autoSelectionName = "Medium";
+      autoSelectionName = "Hard-Balance";
     }
     else if(joySpotter.getRawButton(4))
     {
       // Hard Auto Selection
-      autoSelectionName = "Hard";
+      autoSelectionName = "Hard-Multiple";
     }
     else if(joySpotter.getRawButton(5))
     {
       // The Absolute DREAM Auto Selection
       autoSelectionName = "Dream";
-    }
-    else if(joySpotter.getRawButton(10))
-    {
-      // AprilTag Crosshair Calibrated for loading zone
-      table.getEntry("pipeline").setNumber(TAGS_LOAD);
     }
     else if(joySpotter.getRawButtonPressed(9))
     {
@@ -574,18 +719,18 @@ public class Robot extends TimedRobot
     // SmartDashboard.putNumberArray("settingsArray", temp);
   }
   
-  
   /*
    * END OF PROGRAM
    * 
    * The remaining methods included for completeness but not currently implemented
    */
+  
   @Override
   public void autonomousInit() 
   {
     // Empty
   }
-  
+
   @Override
   public void teleopInit() 
   {
