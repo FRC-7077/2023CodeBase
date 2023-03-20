@@ -6,10 +6,13 @@
 
 package frc.robot;
 
+// import for use with Acceleration Curve system
 import java.util.ArrayList;
 
+// import for the navX2-micro 9-axis Gyro
 import com.kauailabs.navx.frc.AHRS;
 
+// Standard imports from WPILib for hardware and SmartDashboard
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.Solenoid;
@@ -20,14 +23,17 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PneumaticsModuleType;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.Servo;
 //import edu.wpi.first.wpilibj.Timer;
 
+// Rev Robotics imports for SparkMax controllers
 import com.revrobotics.CANSparkMax.IdleMode;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 import com.revrobotics.RelativeEncoder;
 
+// WPILib imports for NetworkTable access with Limelight
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
@@ -41,24 +47,24 @@ import edu.wpi.first.networktables.NetworkTableInstance;
  */
 public class Robot extends TimedRobot
 {
-  // Motors
+  // Motors and Drive Declaration/Insantiation
   private CANSparkMax leftMotor1 = new CANSparkMax(1, MotorType.kBrushless);
   private CANSparkMax leftMotor2 = new CANSparkMax(4, MotorType.kBrushless);
   private CANSparkMax rightMotor1 = new CANSparkMax(2, MotorType.kBrushless);
   private CANSparkMax rightMotor2 = new CANSparkMax(3, MotorType.kBrushless);
   private RelativeEncoder leftEncoder = leftMotor1.getEncoder();
   private RelativeEncoder rightEncoder = rightMotor1.getEncoder();
+  private DifferentialDrive prometheusDrive;
 
-  private DifferentialDrive myDrive;
-
-  // Limit Switches
+  // Limit Switch(es) Declaration/Instantiation
   private DigitalInput legLocked = new DigitalInput(0);
-  private DigitalInput objectAcquired = new DigitalInput(1);
 
   // Acceleration Curve
   // Two seconds worth of ticks at 20ms per tick is 100, 
   // Double that for positive and negative acceleration
   // Finally, add one for full stop...that's 201 ticks
+  // Adjustments will impact the acceleration curve so do 
+  // so only if you also refactor the Curve function itself
 
   private int maxTicks = 201;
   private int currentIndexLeft = maxTicks / 2;
@@ -73,7 +79,8 @@ public class Robot extends TimedRobot
   private Joystick joyDriver = new Joystick(0);
   private Joystick joySpotter = new Joystick(1);
 
-  // Controller Button and Axis Constants because I'm tire of looking them up
+  // Controller Button and Axis Constants because I'm tired of looking them up in the driver's station
+  // Used Buttons/Axes
   private final int X_BUTTON = 1;
   private final int A_BUTTON = 2;
   private final int B_BUTTON = 3;
@@ -82,34 +89,40 @@ public class Robot extends TimedRobot
   private final int RB_BUTTON = 6;
   private final int LT_BUTTON = 7;
   private final int RT_BUTTON = 8;
-      // private final int BACK_BUTTON = 9;
-      // private final int START_BUTTON = 10;
-      //private final int LS_BUTTON = 11;
-      //private final int RS_BUTTON = 12;
-      //private final int LR_AXIS_LEFT_STICK = 0;
   private final int UD_AXIS_LEFT_STICK = 1;
-      //private final int LR_AXIS_RIGHT_STICK = 2;
   private final int UD_AXIS_RIGHT_STICK = 3;
+
+  /*  Unused/Available Buttons/Axes
+      private final int BACK_BUTTON = 9;
+      private final int START_BUTTON = 10;
+      private final int LS_BUTTON = 11;
+      private final int RS_BUTTON = 12;
+      private final int LR_AXIS_LEFT_STICK = 0;
+      private final int LR_AXIS_RIGHT_STICK = 2;
+  */
 
   // Pipeline Constants
   private final int CONE = 0;
   private final int CUBE = 1;
-  private final int RETRO = 2;
-  private final int TAGS_SCORE = 3;
+  private final int TAGS_SCORE_CENTER = 2;
+  private final int TAGS_SCORE_LEFT = 3;
+  private final int TAGS_SCORE_RIGHT = 4;
 
   // Servo Angle Constants
   private final double OPEN_ANGLE = 120.0;
   private final double CLOSE_ANGLE = 30.0;
+  private final double UNLOCK_ANGLE = 0;
+  private final double LOCK_ANGLE = 180;
   
   // Robot Hardware
   Compressor myCompressor = new Compressor(PneumaticsModuleType.CTREPCM);
   Solenoid grabberSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 7);
   Solenoid legSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 0);
   Servo valveServo = new Servo(0);
-  Servo slapReleaseServo = new Servo(1);
-  Servo legReleaseServo_1 = new Servo(2);
-  Servo legReleaseServo_2 = new Servo(3);
-  Servo camRotationServo = new Servo(4);
+  Servo legReleaseServo_1 = new Servo(1);
+  Servo legReleaseServo_2 = new Servo(2);
+  Servo camRotationServo = new Servo(3);
+  Servo slapReleaseServo = new Servo(4);
   
   // NetworkTables Global Variables for use with Limelight
   NetworkTable table = NetworkTableInstance.getDefault().getTable("limelight");
@@ -124,11 +137,23 @@ public class Robot extends TimedRobot
   private double steering_adjust = 0.0;
   private double distance_adjust = 0.0;
 
+  // Encoder Variables
+  private double gearRatio, wheelDiameter, encoderRotationsToFeetConversionFactor;
+
+  // Rotation with navX2 Variables
+  private double targetYaw;
+  private boolean isRotating = false;
+
   // Compressor Enable/Disable variable
   private boolean compressorState = true;
 
-  // Autonomous Stage Array
-  boolean[] stageComplete = {false, false, false, false, false};
+  // Autonomous Stage Tracking Array
+  private int stage = 0;
+
+  // PID Variables for DriveToPosition Method
+  private double errorSum = 0.0;
+  private double lastTimeStamp = Timer.getFPGATimestamp();
+  private double lastError = 0;
 
   @Override
   public void robotInit() 
@@ -139,7 +164,7 @@ public class Robot extends TimedRobot
     acceleration_midpoint = 25;
     populateArrayList();
     
-    // Reset controller settings and set Idle Mode to Coast
+    // Reset controller settings and set Idle Mode to Brake
     leftMotor1.restoreFactoryDefaults();
     leftMotor1.setIdleMode(IdleMode.kCoast);
     leftMotor2.restoreFactoryDefaults();
@@ -156,10 +181,23 @@ public class Robot extends TimedRobot
     // Set left side motors inverted so that we can use the same 
     // numbers for both sides without worrying about signs
     leftMotor1.setInverted(true);
-    
+
+    // Set Encoder Conversion such that position is in feet (ft) and 
+    // velocity is in feet per second (ft/s)
+    // Gear Teeth based on our setup of the Toughbox Mini
+    double encoderGearTeeth = 14;
+    double gear1OuterTeeth = 50;
+    double gear1InnerTeeth = 16;
+    double gear2OuterTeeth = 48;
+    gearRatio = ((encoderGearTeeth/gear1OuterTeeth)*gear1InnerTeeth)/gear2OuterTeeth; // Number of Output shaft revolutions per One Encoder shaft revolution
+    wheelDiameter = 0.6357; // feet
+    encoderRotationsToFeetConversionFactor = gearRatio * Math.PI * wheelDiameter;
+    leftEncoder.setPositionConversionFactor(encoderRotationsToFeetConversionFactor);
+    //rightEncoder.setPositionConversionFactor(encoderRotationsToFeetConversionFactor);
+
     // Enable the compressor and set up the Drivetrain
     myCompressor.enableDigital();
-    myDrive = new DifferentialDrive(leftMotor1, rightMotor1);
+    prometheusDrive = new DifferentialDrive(leftMotor1, rightMotor1);
 
     
     // Create and calibrate the navX2 sensor package
@@ -177,11 +215,14 @@ public class Robot extends TimedRobot
   @Override
   public void robotPeriodic() 
   {
-    // Check Spotter Joystick for input
+    // Check Spotter Joystick for input so SPotter can modify Autonomous Setup
     joySpotter();
 
     // Show which Autonomous is Selected
     SmartDashboard.putString("Auto Selected", autoSelectionName);
+
+    // LegLock Limit Switch State
+    SmartDashboard.putBoolean("LegLockSwitch", legLocked.get());
 
     // Toggle for Compressor
     compressorState = SmartDashboard.getBoolean("Compressor", compressorState);
@@ -196,36 +237,11 @@ public class Robot extends TimedRobot
       myCompressor.enableDigital();
     }
     SmartDashboard.putBoolean("Compressor", compressorState);
-
-    // Acceleration Curve Values
-    double curvature = SmartDashboard.getNumber("Curvature", acceleration_curvature);
-    double midpoint = SmartDashboard.getNumber("Midpoint", acceleration_midpoint);
-    boolean repopulate = false;
-
-    if(curvature != acceleration_curvature)
-    {
-      acceleration_curvature = curvature;
-      repopulate = true;
-    }
-    if(midpoint != acceleration_midpoint)
-    {
-      acceleration_midpoint = midpoint;
-      repopulate = true;
-    }
-    if(repopulate)
-    {
-      populateArrayList();
-    }
-
-    SmartDashboard.putNumber("Curvature", acceleration_curvature);
-    SmartDashboard.putNumber("Midpoint", acceleration_midpoint);
-
-
     // For Testing Purposes
-    // // NavX Info 
-    // SmartDashboard.putNumber("NavX Yaw", Math.floor(navX2.getYaw()));
-    // SmartDashboard.putNumber("NavX Pitch", Math.floor(navX2.getPitch()));
-    // SmartDashboard.putNumber("NavX Roll", Math.floor(navX2.getRoll()));
+    // NavX Info 
+    SmartDashboard.putNumber("NavX Yaw", Math.floor(navX2.getYaw()));
+    SmartDashboard.putNumber("NavX Pitch", Math.floor(navX2.getPitch()));
+    SmartDashboard.putNumber("NavX Roll", Math.floor(navX2.getRoll()));
     
     // // Limelight Info
     //   //read values periodically
@@ -243,160 +259,173 @@ public class Robot extends TimedRobot
   }
 
   @Override
+  public void autonomousInit() 
+  {
+    lastTimeStamp = Timer.getFPGATimestamp();
+    lastError = 0.0;
+    leftMotor1.setIdleMode(IdleMode.kBrake);
+    leftMotor2.setIdleMode(IdleMode.kBrake);
+    rightMotor1.setIdleMode(IdleMode.kBrake);
+    rightMotor2.setIdleMode(IdleMode.kBrake);
+
+    // Reset Encoder Positions to zero
+    leftEncoder.setPosition(0.0);
+    rightEncoder.setPosition(0.0);
+  }
+
+  @Override
   public void autonomousPeriodic() 
   {
     //ALERT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // Still need to tune Encoder settings for all profiles
 
-    if(autoSelectionName.equals("Easy"))
+    // Switch Statement based on Autonomous Selected
+    switch (autoSelectionName)
     {
-      // Very Easy Mode
-      // 6-9 Point Auto
-      if(!stageComplete[0])
-      {
-        // Score Piece (3-6pts)
-        slapReleaseServo.setAngle(OPEN_ANGLE);
-
-        // Drive out of Community (3pts)
-        leftEncoder.setPosition(10);  // NEEDS TUNING
-        stageComplete[0] = true;
-      }
-    }
-    else if(autoSelectionName.equals("Hard-Balance"))
-    {
-      // Hard Mode
-      // 18-21 Point Auto
-      if(!stageComplete[0])
-      {
-        // Score Piece (3-6pts)
-        slapReleaseServo.setAngle(OPEN_ANGLE);
-
-        // Drive out of community over charge station (3pts)
-        leftEncoder.setPosition(10);  // NEEDS TUNING
-        rightEncoder.setPosition(10);  // NEEDS TUNING
-        stageComplete[0] = true;
-      }
-      else if(!stageComplete[1])
-      {
-        // Turn toward charge station
-        autoRotateToAngle(180);
-        stageComplete[1] = true;
-      }
-      else if(!stageComplete[2])
-      {
-        // Drive back to charge station
-        leftEncoder.setPosition(15);  // NEEDS TUNING
-        rightEncoder.setPosition(15);  // NEEDS TUNING
-        stageComplete[2] = true;
-      }
-      else if(!stageComplete[3])
-      {
-        // Balance (12pts)
-        balance();
-        updateMotorSetting(0.0, 0.0);
-      }
-
-    }
-    else if(autoSelectionName.equals("Hard-Multiple"))
-    {
-      // Hard Mode - Points depend on score
-      
-      // Target and acquire cone
-      // Turn 180 Degrees
-      // Drive back to community and acquire Pole Node
-      // Drive and score second piece (6pts/3pts)
-      if(!stageComplete[0])
-      {
-        // Score First Piece (3-6pts)
-        slapReleaseServo.setAngle(OPEN_ANGLE);
-
-        // Drive out of community (3pts)
-        leftEncoder.setPosition(10);  // NEEDS TUNING
-        rightEncoder.setPosition(10);  // NEEDS TUNING
-        stageComplete[0] = true;
-      }
-      else if(!stageComplete[1])
-      {
-        // Target and acquire Cone
-        table.getEntry("pipeline").setNumber(CONE);
-        while(!objectAcquired.get())
+      // Each Autonomous Case will use another switch statement to
+      // handle the stages of the program
+      case "Easy":
+        switch (stage)
         {
-          autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
-          updateMotorSetting(0.0, 0.0);
-        }
-        grabberSolenoid.set(false);
-        stageComplete[1] = true;
-      }
-      else if(!stageComplete[2])
-      {
-        // Turn toward scoring area and approach
-        autoRotateToAngle(180);
-        leftEncoder.setPosition(15);  // NEEDS TUNING
-        rightEncoder.setPosition(15);  // NEEDS TUNING
-        stageComplete[2] = true;
-      }
-      else if(!stageComplete[3])
-      {
-        // Target and Acquire Cone Scoring pole
-        table.getEntry("pipeline").setNumber(RETRO);
+          case 0: // Release the bungee to slap the cube
+            unlockLeg();
+            stage = 1;
+            break;
 
-        while(Math.abs(txEntry.getDouble(0.0)) > 1 && 
+          case 1: // Drive some "dist" feet away from starting position and use returned error to determine stage completeness
+            SmartDashboard.putNumber("Position", leftEncoder.getPosition());
+            double error = driveToPosition(50);
+            SmartDashboard.putNumber("Error", error);
+            stage = error > 0.01 ? 1 : 2;
+            SmartDashboard.putNumber("Stage", stage);
+            break;
+          
+          case 2:
+            distance_adjust = 0.0;
+            steering_adjust = 0.0;
+
+          default:
+            break;
+        }  
+        break;
+      
+      case "Hard-Balance":
+        switch (stage)
+        {
+          case 0: // Release the bungee to slap the cube
+            unlockLeg();
+            stage = 1;
+            break;
+
+          case 1: // Drive some "dist" feet away from starting position and use returned error to determine stage completeness
+            stage = Math.abs(driveToPosition(18)) > 0.5 ? 1 : 2;
+            break;
+
+          case 2: // Drive back to Charge Station
+            stage = Math.abs(driveToPosition(11)) > 0.5 ? 2 : 3;
+            break;
+
+          case 3: // balance
+            balance();
+            break;
+
+          default:
+            break;
+        }
+        break;
+
+      case "Hard-Multiple":
+        switch (stage)
+        {
+          case 0: // Release the bungee to slap the cube
+            unlockLeg();
+            stage = 1;
+            break;
+
+          case 1: // Drive some "dist" feet away from starting position and use returned error to determine stage completeness
+            stage = Math.abs(driveToPosition(18)) > 0.5 ? 1 : 2;
+            break;
+
+          case 2:// Target and acquire Cone
+            table.getEntry("pipeline").setNumber(CONE);
+            if(Math.abs(txEntry.getDouble(0.0)) > 1.0 && Math.abs(tyEntry.getDouble(0.0)) > 1.0)
+            {
+              autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
+            }
+            else
+            {
+              grabberSolenoid.set(false);
+              stage = 3;
+            }
+            break;
+
+          case 3: // Turn toward scoring area and lift leg
+            autoRotateToAngle(180);
+            liftLeg();
+            stage = isRotating ? 3 : 4;
+            
+          case 4: // Approach Goal
+            // Reset Encoder positions to zero for ease of use
+            leftEncoder.setPosition(0.0);
+            rightEncoder.setPosition(0.0);
+
+            // Drive close enough to acquire targeting on AprilTag
+            stage = Math.abs(driveToPosition(4)) > 0.01 ? 4 : 5;
+
+          case 5: // Target and AutoAim/Approach goal
+            // Target and Acquire Cone Scoring pole using AprilTag to right of 
+            table.getEntry("pipeline").setNumber(TAGS_SCORE_RIGHT);  // TAGS_SCORE_RIGHT or TAGS_SCORE_LEFT depending on which side we load in on
+
+            if(Math.abs(txEntry.getDouble(0.0)) > 1 || 
               Math.abs(tyEntry.getDouble(0.0)) > 1
               )
-        {
-          autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
-          updateMotorSetting(0.0, 0.0);
+            {
+              autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
+            }
+            else
+            {
+              stopLeg();
+              grabberSolenoid.set(true);
+              stage = 6;
+            }
+
+          default:
+            break;
         }
-        grabberSolenoid.set(true);
-        stageComplete[3] = true;
-      }
-      
+        break;
+
+      case "Dream": // Not yet implemented
+        break;
+
+      default:
+        DriverStation.reportError("Error Selecting Autonomous:  Selected Value is:  " + autoSelectionName, true);
+        break;
     }
-    else if(autoSelectionName.equals("Dream"))
-    {
-      /* DREAM Mode
-       * 27 Point Auto
-       * 
-       */
-    }
+
+    updateMotorSetting(0.0, 0.0);
   }
 
-
+  @Override
+  public void teleopInit() 
+  {
+    leftMotor1.setIdleMode(IdleMode.kCoast);
+    leftMotor2.setIdleMode(IdleMode.kCoast);
+    rightMotor1.setIdleMode(IdleMode.kCoast);
+    rightMotor2.setIdleMode(IdleMode.kCoast);
+  }  
+  
   @Override
   public void teleopPeriodic() 
   {
     joyDriver();
     updateMotorSetting(joyDriver.getRawAxis(UD_AXIS_LEFT_STICK), joyDriver.getRawAxis(UD_AXIS_RIGHT_STICK));
-    // double left = 0.0;
-    // double right = 0.0;
-    // double desired_setpoint_left = steering_adjust + distance_adjust;
-    // double desired_setpoint_right = -steering_adjust + distance_adjust;
-
-    // // Get Desired Setpoints based on Stick 
-    // desired_setpoint_left += (double)((int)(joyDriver.getRawAxis(UD_AXIS_LEFT_STICK)*10000))/10000;
-    // desired_setpoint_right += (double)((int)(joyDriver.getRawAxis(UD_AXIS_RIGHT_STICK)*10000))/10000;
-
-    // currentIndexLeft = updateMotorIndex(desired_setpoint_left, currentIndexLeft);
-    // currentIndexRight = updateMotorIndex(desired_setpoint_right, currentIndexRight);
-
-    // left = settingsList.get(currentIndexLeft);
-    // right = settingsList.get(currentIndexRight);
-
-    // Test Output
-    // SmartDashboard.putNumber("Setpoint Left", desired_setpoint_left);
-    // SmartDashboard.putNumber("Setpoint Right", desired_setpoint_right);
-    // SmartDashboard.putNumber("Current Left", left);
-    // SmartDashboard.putNumber("Current Right", right);
     
-    // SmartDashboard.putNumber("Output Left", leftMotor1.getAppliedOutput());
-    // SmartDashboard.putNumber("Output Right", rightMotor1.getAppliedOutput());
-
-    // Set Motors to new speed and updates tracking variables...Always do this last
-    // myDrive.tankDrive(left, right);
-    // steering_adjust = 0.0;
-    // distance_adjust = 0.0;
   }
 
+  /*
+   * Method that takes a Yaw Error (tx) and Roll Error (ty) and sets adjustment variables
+   * to bring robot to a position that will reduce those errors to zero
+   */
   public void autoAim(double tx, double ty)
   {
     double KpAim = 0.02;
@@ -406,6 +435,9 @@ public class Robot extends TimedRobot
     double heading_error = -tx;
     double distance_error = -ty;
 
+    heading_error = heading_error > 30 ? 30 : heading_error;
+    heading_error = heading_error < -30 ? -30 : heading_error;
+
     if (tx > 1.0)
     {
       steering_adjust = KpAim*heading_error - min_aim_command;
@@ -414,37 +446,90 @@ public class Robot extends TimedRobot
     {
       steering_adjust = KpAim*heading_error + min_aim_command;
     }
+    SmartDashboard.putNumber("tx", tx);
+    SmartDashboard.putNumber("DistanceAdjust", distance_adjust);
+    SmartDashboard.putNumber("SteeringAdjust", steering_adjust);
+    SmartDashboard.putNumber("CurrentIndexLeft", currentIndexLeft);
+    SmartDashboard.putNumber("CurrentIndexRight", currentIndexRight);
+    
 
     distance_adjust = KpDistance * distance_error;   
   }
 
+  /*
+   * Method that takes a desired Yaw angle and uses the AutoAim method
+   * to rotate the robot to that desired Yaw Angle
+   * 
+   * NOTE: The angle should be between -180 and 180 since the NavX2-Micro
+   *       returns Yaw values in that range
+   */
   public void autoRotateToAngle(double angle)
   {
     double currentYaw = navX2.getYaw();
-    double targetYaw = angle;
+
+    SmartDashboard.putNumber("CurrentYaw", currentYaw);
+    SmartDashboard.putNumber("TargetYaw", angle);
     
-    while(currentYaw  < targetYaw - 5 || currentYaw > targetYaw + 5)
+    
+    if(currentYaw < angle - 5 || currentYaw > angle + 5)
     {
-      currentYaw = navX2.getYaw();
-      autoAim(targetYaw - currentYaw, 0.0);
-      updateMotorSetting(0.0, 0.0);
+      autoAim(angle - currentYaw, 0.0);
+      isRotating = true;
+    }
+    else
+    {
+      isRotating = false;
     }
   }
 
-  public void autoRotateByAngle(double angle)
-  {
-    navX2.reset();
-    autoRotateToAngle(angle);
-  }
-
+  /* 
+   * Method that sets the distance adjustment variable based
+   * on the Pitch angle from the NavX2-Micro so that it will 
+   * roll forward if it is leaning back and vice versa
+   */
   public void balance()
   {
-    double roll_error = -navX2.getRoll();
+    double pitch_error = -navX2.getPitch();
 
-    // Set Adjustment for Yaw Direction
-    distance_adjust = roll_error / 90;
+    // Set Adjustment for Pitch Correction
+    distance_adjust = pitch_error / 90;
   }
 
+  /*
+   * Method to move motors unitl the average distance read
+   * from both encoders is "pos"
+   * Thanks to Team 6814 and their 0 to Autonomous Series
+   */
+  public double driveToPosition(double pos)
+  {
+    double kP = 0.00004;
+    double kI = 0.000004;
+    double kD = 0.01;
+    double kIZone = 0.0;
+    double dt = Timer.getFPGATimestamp() - lastTimeStamp;
+
+    double error = pos - leftEncoder.getPosition();
+
+    if(Math.abs(error) < kIZone)
+    {
+      errorSum += error * dt;
+    }
+
+    double errorRate = (error - lastError) / dt;
+
+    lastTimeStamp = Timer.getFPGATimestamp();
+    lastError = error;
+
+    distance_adjust = kP*error + kI*errorSum + kD*errorRate;
+    return distance_adjust;
+  }
+  /*
+   * This method moves the motor through the indices of the
+   * ArrayList that holds the pre-calculated motor settings along
+   * the Logistics Curve  The setpoint is the desired setpoint
+   * and the index should be the current index of the setting for
+   * the motor being updated
+   */
   public int updateMotorIndex(double setpoint, int index)
   {
     // Full stop error correction for joystick drift
@@ -482,7 +567,7 @@ public class Robot extends TimedRobot
     }
 
     // Limit speed during in-place rotations and when leg is unlocked
-    if(leftMotor1.getAppliedOutput() * rightMotor1.getAppliedOutput() < 0) // || !legLocked.get())
+    if(leftMotor1.getAppliedOutput() * rightMotor1.getAppliedOutput() < 0 || !legLocked.get())
     {
       if(index < maxTicks/3)
       {
@@ -505,6 +590,10 @@ public class Robot extends TimedRobot
     double desired_setpoint_left = steering_adjust + distance_adjust;
     double desired_setpoint_right = -steering_adjust + distance_adjust;
 
+    SmartDashboard.putNumber("DesiredRight", desired_setpoint_right);
+    SmartDashboard.putNumber("DesiredLeft", desired_setpoint_left);
+    
+
     // Get Desired Setpoints based on Stick 
     desired_setpoint_left += (double)((int)(joyModX*10000))/10000;
     desired_setpoint_right += (double)((int)(joyModY*10000))/10000;
@@ -515,7 +604,7 @@ public class Robot extends TimedRobot
     left = settingsList.get(currentIndexLeft);
     right = settingsList.get(currentIndexRight);
     
-    myDrive.tankDrive(left, right);
+    prometheusDrive.tankDrive(left, right);
     steering_adjust = 0.0;
     distance_adjust = 0.0;
   }
@@ -526,7 +615,12 @@ public class Robot extends TimedRobot
   //   AutoAim, AutoBalance
   public void joyDriver()
   {
-    if(joyDriver.getRawButton(A_BUTTON))
+    if(isRotating)
+    {
+      // Keep Rotating
+      autoRotateToAngle(targetYaw);
+    }
+    else if(joyDriver.getRawButton(A_BUTTON))
     {
       // Automatically adjust Yaw and Distance to current Limelight pipeline Target
       autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
@@ -538,13 +632,19 @@ public class Robot extends TimedRobot
     }
     else if(joyDriver.getRawButton(X_BUTTON))
     {
-      // This will automatically turn the robot 90 degrees CCW
-      autoRotateByAngle(90);
+      // Turns 90 Degrees Clockwise
+      isRotating = true;
+      navX2.reset();
+      targetYaw = 90;
+      autoRotateToAngle(targetYaw);
     }
     else if(joyDriver.getRawButton(Y_BUTTON))
     {
-      // This will automatically turn the robot 90 degrees CCW
-      autoRotateByAngle(180);
+      // Turns 90 Degrees Counter-Clockwise
+      isRotating = true;
+      navX2.reset();
+      targetYaw = -90;
+      autoRotateToAngle(targetYaw);
     }
     else if(joyDriver.getRawButton(RT_BUTTON))
     {
@@ -558,14 +658,17 @@ public class Robot extends TimedRobot
     }
     else if(joyDriver.getRawButton(LB_BUTTON))
     {
+      unlockLeg();
       liftLeg();
     }
     else if(joyDriver.getRawButton(RB_BUTTON))
     {
+      lockLeg();
       lowerLeg();
     }
     else
     {
+      lockLeg();
       stopLeg();
     }
   }
@@ -577,42 +680,42 @@ public class Robot extends TimedRobot
   {
     if(joySpotter.getRawButton(1)) // Trigger Button
     {
-      // If Spotter notices low battery or brownout then disable compressor
-      if(myCompressor.isEnabled())
-      {
-        myCompressor.disable();
-      }
-      else myCompressor.enableDigital();
+      
     }
-    else if(joySpotter.getRawButton(2))
+    else if(joySpotter.getRawButton(2)) // Thumb Buttons
     {
       // Easy Auto Selection
       autoSelectionName = "Easy";
     }
-    else if(joySpotter.getRawButton(3))
+    else if(joySpotter.getRawButton(3)) // Thumb Buttons
     {
-      // Medium Auto Selection
+      // Hard-Balance Auto Selection
       autoSelectionName = "Hard-Balance";
     }
-    else if(joySpotter.getRawButton(4))
+    else if(joySpotter.getRawButton(4)) // Thumb Buttons
     {
-      // Hard Auto Selection
+      // Hard-Multiple Auto Selection
       autoSelectionName = "Hard-Multiple";
     }
-    else if(joySpotter.getRawButton(5))
+    else if(joySpotter.getRawButton(5)) // Thumb Buttons
     {
       // The Absolute DREAM Auto Selection
       autoSelectionName = "Dream";
     }
-    else if(joySpotter.getRawButtonPressed(9))
-    {
-      // AprilTag Crosshair Calibrated for Scoring Pipeline
-      table.getEntry("pipeline").setNumber(TAGS_SCORE);
-    }
     else if(joySpotter.getRawButton(8))
     {
-      // Retro-Tape for Scoring Pipeline
-      table.getEntry("pipeline").setNumber(RETRO);
+      // AprilTag Crosshair Calibrated for Scoring Cones to LEFT
+      table.getEntry("pipeline").setNumber(TAGS_SCORE_RIGHT);
+    }
+    else if(joySpotter.getRawButtonPressed(10))
+    {
+      // AprilTag Crosshair Calibrated for Scoring Cubes
+      table.getEntry("pipeline").setNumber(TAGS_SCORE_LEFT);
+    }
+    else if(joySpotter.getRawButtonPressed(9))
+    {
+      // AprilTag Crosshair Calibrated for Scoring Cubes
+      table.getEntry("pipeline").setNumber(TAGS_SCORE_CENTER);
     }
     else if(joySpotter.getRawButton(7))
     {
@@ -648,6 +751,18 @@ public class Robot extends TimedRobot
   {
     valveServo.setAngle(CLOSE_ANGLE);
     legSolenoid.set(false);
+  }
+  
+  public void lockLeg()
+  {
+    legReleaseServo_1.setAngle(LOCK_ANGLE);
+    legReleaseServo_2.setAngle(LOCK_ANGLE);
+  }
+
+  public void unlockLeg()
+  {
+    legReleaseServo_1.setAngle(UNLOCK_ANGLE);
+    legReleaseServo_2.setAngle(UNLOCK_ANGLE);
   }
 
   public double getSettingFromCurve(double x)
@@ -724,18 +839,8 @@ public class Robot extends TimedRobot
    * 
    * The remaining methods included for completeness but not currently implemented
    */
-  
-  @Override
-  public void autonomousInit() 
-  {
-    // Empty
-  }
 
-  @Override
-  public void teleopInit() 
-  {
-    // Empty
-  }
+ 
 
   @Override
   public void disabledInit() 
