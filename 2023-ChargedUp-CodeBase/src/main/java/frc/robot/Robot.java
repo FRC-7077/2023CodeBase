@@ -150,6 +150,8 @@ public class Robot extends TimedRobot
   // Rotation with navX2 Variables
   private double targetYaw;
   private boolean isRotating = false;
+  private boolean wasRotating = false;
+
 
   // Compressor Enable/Disable variable
   private boolean compressorState = true;
@@ -240,7 +242,7 @@ public class Robot extends TimedRobot
             pos = -12; // This is in feet
             error = pos - leftEncoder.getPosition();
 
-            //leftPID.setFF(0.000156); // Less aggressive acceleration for use with Charge Station
+            //leftPID.setFF(0.000656); // Less aggressive acceleration for use with Charge Station
             leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
             rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
 
@@ -251,7 +253,7 @@ public class Robot extends TimedRobot
             pos = -3; // This is in feet
             error = pos - leftEncoder.getPosition();
 
-            //leftPID.setFF(0.000156); // Less aggressive acceleration for use with Charge Station
+            //leftPID.setFF(0.000656); // Less aggressive acceleration for use with Charge Station
             leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
             rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
 
@@ -418,6 +420,30 @@ public class Robot extends TimedRobot
   //   AutoAim, AutoBalance
   public void joyDriver()
   {
+
+    isRotating=false;
+    if(joyDriver.getRawButton(X_BUTTON))
+    {
+      // Turns 90 Degrees Counter-Clockwise
+      isRotating = true;
+      targetYaw = -90;
+      //autoRotateToAngle(targetYaw);
+    }
+    if(joyDriver.getRawButton(Y_BUTTON))
+    {
+      // Turns 90 Degrees Clockwise
+      isRotating = true;
+      targetYaw = 90;
+      //autoRotateToAngle(targetYaw);
+    }
+    if(!wasRotating && isRotating)
+    {
+      navX2.reset();
+    }
+    wasRotating = isRotating;
+
+
+    //////////////////////////////
     if(isRotating)
     {
       // Keep Rotating
@@ -433,22 +459,22 @@ public class Robot extends TimedRobot
       // Automatically move robot to try and obtain ~0 Pitch
       balance();
     }
-    else if(joyDriver.getRawButton(X_BUTTON))
-    {
-      // Turns 90 Degrees Counter-Clockwise
-      isRotating = true;
-      navX2.reset();
-      targetYaw = -90;
-      autoRotateToAngle(targetYaw);
-    }
-    else if(joyDriver.getRawButton(Y_BUTTON))
-    {
-      // Turns 90 Degrees Clockwise
-      isRotating = true;
-      navX2.reset();
-      targetYaw = 90;
-      autoRotateToAngle(targetYaw);
-    }
+    // else if(joyDriver.getRawButton(X_BUTTON))
+    // {
+    //   // Turns 90 Degrees Counter-Clockwise
+    //   isRotating = true;
+    //   navX2.reset();
+    //   targetYaw = -90;
+    //   //autoRotateToAngle(targetYaw);
+    // }
+    // else if(joyDriver.getRawButton(Y_BUTTON))
+    // {
+    //   // Turns 90 Degrees Clockwise
+    //   isRotating = true;
+    //   navX2.reset();
+    //   targetYaw = 90;
+    //   //autoRotateToAngle(targetYaw);
+    // }
     else if(joyDriver.getRawButton(RT_BUTTON))
     {
       // Open Grabber
@@ -505,14 +531,14 @@ public class Robot extends TimedRobot
     else if(joySpotter.getRawButton(5)) // Thumb Buttons Top Upper Left
     {
       // Target Cone on High Loading Area Pipeline
-      table.getEntry("pipeline").setNumber(LOAD_CONE_HIGH);
+      //table.getEntry("pipeline").setNumber(LOAD_CONE_HIGH);
     }
     else if(joySpotter.getRawButton(6)) // Thumb Buttons Top Upper Right
     {
       // Target Cube on High Loading Area Pipeline
-      table.getEntry("pipeline").setNumber(LOAD_CUBE_HIGH);
+      //table.getEntry("pipeline").setNumber(LOAD_CUBE_HIGH);
     }
-    else if(joySpotter.getRawButton(7)) // Base Buttons Top Left
+    else if(joySpotter.getRawButton(5)) // Base Buttons Top Left
     {
       // Target Cone on Low Loading Area Pipeline
       table.getEntry("pipeline").setNumber(LOAD_CONE_LOW);
@@ -522,7 +548,7 @@ public class Robot extends TimedRobot
       // AprilTag Crosshair Calibrated for Scoring Cones to LEFT
       table.getEntry("pipeline").setNumber(TAGS_SCORE_RIGHT);
     }
-    else if(joySpotter.getRawButtonPressed(9)) // Base Buttons Middle Left
+    else if(joySpotter.getRawButtonPressed(6)) // Base Buttons Middle Left
     {
       // Target Cube on Low Loading Area Pipeline
       table.getEntry("pipeline").setNumber(LOAD_CUBE_LOW);
@@ -547,7 +573,7 @@ public class Robot extends TimedRobot
       // Easy Auto Selection
       autoSelectionName = "Easy";
     }
-    else if(joySpotter.getPOV() == 90) // POV Hat RIGHT
+    else if(joySpotter.getPOV() == 270) // POV Hat RIGHT
     {
       // Hard-Balance Auto Selection
       autoSelectionName = "Hard-Balance";
@@ -557,7 +583,7 @@ public class Robot extends TimedRobot
       // Hard-Multiple Auto Selection
       autoSelectionName = "Hard-Multiple";
     }
-    else if(joySpotter.getPOV() == 270) // POV Hat LEFT
+    else if(joySpotter.getPOV() == 90) // POV Hat LEFT
     {
       // Dream Auto Selection
       autoSelectionName = "Dream";
@@ -586,12 +612,16 @@ public class Robot extends TimedRobot
     // Reset controller settings and set Idle Mode to Brake
     leftMotor1.restoreFactoryDefaults();
     leftMotor1.setIdleMode(IdleMode.kCoast);
+    leftMotor1.setSmartCurrentLimit(80);
     leftMotor2.restoreFactoryDefaults();
     leftMotor2.setIdleMode(IdleMode.kCoast);
+    leftMotor2.setSmartCurrentLimit(80);
     rightMotor1.restoreFactoryDefaults();
     rightMotor1.setIdleMode(IdleMode.kCoast);
+    rightMotor1.setSmartCurrentLimit(80);
     rightMotor2.restoreFactoryDefaults();
     rightMotor2.setIdleMode(IdleMode.kCoast);
+    rightMotor2.setSmartCurrentLimit(80);
 
     // Set secondary motors on each side as followers
     leftMotor2.follow(leftMotor1);
@@ -721,11 +751,11 @@ public class Robot extends TimedRobot
     if(currentYaw < angle - 5 || currentYaw > angle + 5)
     {
       autoAim(angle - currentYaw, 0.0);
-      isRotating = true;
+      //isRotating = true;
     }
     else
     {
-      isRotating = false;
+      //isRotating = false;
     }
   }
 
@@ -736,7 +766,7 @@ public class Robot extends TimedRobot
    */
   public void balance()
   {
-    double pitch_error = -navX2.getPitch();
+    double pitch_error = -navX2.getRoll();
 
     // Set Adjustment for Pitch Correction
     distance_adjust = Math.abs(pitch_error) > 10 ? pitch_error / 90 : 0;
