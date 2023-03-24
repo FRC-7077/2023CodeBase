@@ -636,8 +636,8 @@ public class Robot extends TimedRobot
     // Gear Teeth based on our setup of the Toughbox Mini
     double encoderGearTeeth = 14;
     double gear1OuterTeeth = 50;
-    double gear1InnerTeeth = 14;
-    double gear2OuterTeeth = 50;
+    double gear1InnerTeeth = 16;
+    double gear2OuterTeeth = 48;
     gearRatio = ((encoderGearTeeth/gear1OuterTeeth)*gear1InnerTeeth)/gear2OuterTeeth; // Number of Output shaft revolutions per One Encoder shaft revolution
     wheelDiameter = 0.6357; // feet
     encoderRotationsToFeetConversionFactor = gearRatio * Math.PI * wheelDiameter;
