@@ -107,8 +107,6 @@ public class Robot extends TimedRobot
   private final int TAGS_SCORE_CENTER = 2;
   private final int TAGS_SCORE_LEFT = 3;
   private final int TAGS_SCORE_RIGHT = 4;
-  // private final int LOAD_CONE_HIGH = 5;
-  // private final int LOAD_CUBE_HIGH = 6;
   private final int LOAD_CONE_LOW = 5;
   private final int LOAD_CUBE_LOW = 6;
 
@@ -117,8 +115,7 @@ public class Robot extends TimedRobot
   private final double CLOSE_ANGLE = 30.0;
   private final double UNLOCK_ANGLE = 0;
   private final double LOCK_ANGLE = 180;
-  //private final double TARGET_ANGLE = 27;
-  //private final double DISTANCE_ANGLE = 0;
+
   
   // Robot Hardware
   Compressor myCompressor = new Compressor(PneumaticsModuleType.CTREPCM);
