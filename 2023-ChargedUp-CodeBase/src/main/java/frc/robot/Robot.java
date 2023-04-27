@@ -1,9 +1,3 @@
-/* 
-// Copyright (c) FIRST and other WPILib contributors.
-// Open Source Software; you can modify and/or share it under the terms of
-// the WPILib BSD license file in the root directory of this project.
-*/
-
 package frc.robot;
 
 // import for use with Acceleration Curve system
@@ -37,13 +31,6 @@ import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 
-
-/**
- * The VM is configured to automatically run this class, and to call the functions corresponding to
- * each mode, as described in the TimedRobot documentation. If you change the name of this class or
- * the package after creating this project, you must also update the build.gradle file in the
- * project.
- */
 public class Robot extends TimedRobot
 {
   /*
@@ -65,18 +52,14 @@ public class Robot extends TimedRobot
     leftEncoder.setPosition(0.0);
     rightEncoder.setPosition(0.0);
 
-    maxRPM = 1000;
+    grabberSolenoid.set(true);
   }
 
   @Override
   public void autonomousPeriodic() 
   {
-    // ALERT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // Still need to tune Encoder settings for all profiles
     double pos = 0.0;
     double error = 0.0;
-    double left = 0.0;
-    double right = 0.0;
     
 
 // Switch Statement based on Autonomous Selected
@@ -89,12 +72,12 @@ public class Robot extends TimedRobot
         {
           case 0: // Release the bungee to slap the cube
             slapTheCube();
-            Timer.delay(1);
+            Timer.delay(3);
             stage = 1;
             break;
 
           case 1: // Drive to position "pos"
-            pos = -12; // This is in feet...negative values move the robot forward
+            pos = -16; // This is in feet...negative values move the robot forward
             leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
             rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
 
@@ -110,33 +93,79 @@ public class Robot extends TimedRobot
         {
           case 0: // Release the bungee to slap the cube
             slapTheCube();
-            Timer.delay(1);
+            Timer.delay(3);
             stage = 1;
             break;
 
           case 1: // Drive to position "pos"
-            pos = -12; // This is in feet
-            error = pos - leftEncoder.getPosition();
-
-            //leftPID.setFF(0.000656); // Less aggressive acceleration for use with Charge Station
-            leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
-            rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
-
-            stage = Math.abs(error) > 0.1 ? 1 : 2;
-            break;
-
-          case 2: // Drive back to Charge Station
-            pos = -5; // This is in feet
+            pos = -15; // This is in feet
             error = pos - leftEncoder.getPosition();
 
             leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
             rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
 
             stage = Math.abs(error) > 0.1 ? 1 : 2;
-            if(stage == 2){ Timer.delay(2);}
             break;
 
-          case 3: // balance
+          case 2:
+            if(navX2.getYaw() < 91 && navX2.getYaw() > 89)
+            {
+              Timer.delay(1);
+              if(navX2.getYaw() < 91 && navX2.getYaw() > 89)
+              {
+                stage = 3;
+                isRotating = false;
+                leftEncoder.setPosition(0.0);
+                rightEncoder.setPosition(0.0);
+              }
+            }
+            else
+            {
+              targetYaw = 90;
+              isRotating = true;
+            }
+          
+          case 3: // Drive back to Charge Station
+            pos = 3; // This is in feet
+            error = pos - (leftEncoder.getPosition() + rightEncoder.getPosition())/2;
+
+            leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
+            rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
+
+            stage = Math.abs(error) > 0.1 ? 3 : 4;
+            if(stage == 3){ Timer.delay(2);}
+            break;
+
+          case 4:
+            if(navX2.getYaw() < -179 && navX2.getYaw() > 179)
+            {
+              Timer.delay(1);
+              if(navX2.getYaw() < -179 && navX2.getYaw() > 179)
+              {
+                stage = 5;
+                isRotating = false;
+                leftEncoder.setPosition(0.0);
+                rightEncoder.setPosition(0.0);
+              }
+            }
+            else
+            {
+              targetYaw = 180;
+              isRotating = true;
+            }
+          
+            case 5: // Drive back to Charge Station
+            pos = 3; // This is in feet
+            error = pos - (leftEncoder.getPosition() + rightEncoder.getPosition())/2;
+
+            leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
+            rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
+
+            stage = Math.abs(error) > 0.1 ? 5 : 6;
+            if(stage == 5){ Timer.delay(2);}
+            break;
+            
+          case 6: // balance
             isBalancing = true;
             break;
 
@@ -145,107 +174,10 @@ public class Robot extends TimedRobot
         }
         break;
 
-      case "Hard-Multiple":
-        switch (stage)
-        {
-          case 0: // Release the bungee to slap the cube
-            slapTheCube();
-            Timer.delay(1);
-            stage = 1;
-            break;
-
-          case 1: // Drive to position "pos"
-            pos = -12; // This is in feet
-            error = pos - leftEncoder.getPosition();
-
-            leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
-            rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
-
-            stage = Math.abs(error) < 0.1 ? 1 : 2;
-            break;
-
-          case 2:// Target and acquire Game Piece
-            table.getEntry("pipeline").setNumber(CUBE); // Chage Pipeline as needed
-            if(Math.abs(txEntry.getDouble(0.0)) > 1.0 && Math.abs(tyEntry.getDouble(0.0)) > 1.0)
-            {
-              autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));   
-              left = (steering_adjust - distance_adjust) * maxRPM; 
-              right = (-steering_adjust - distance_adjust) * maxRPM;         
-              leftPID.setReference(left, CANSparkMax.ControlType.kVelocity);
-              rightPID.setReference(right, CANSparkMax.ControlType.kVelocity);
-            }
-            else
-            {
-              grabberSolenoid.set(false);
-              stage = 3;
-            }
-            break;
-
-          case 3: // Turn toward scoring area and lift leg
-            targetYaw = -180;
-            isRotating = true;
-            left = (steering_adjust) * maxRPM/2; 
-            right = (-steering_adjust) * maxRPM/2;         
-            leftPID.setReference(left, CANSparkMax.ControlType.kVelocity);
-            rightPID.setReference(right, CANSparkMax.ControlType.kVelocity);
-            liftLeg();
-            Timer.delay(0.1);
-            stage = (navX2.getYaw() - 2 > -180) ? 3 : 4;
-            
-          case 4: // Approach Goal
-            // End rotation and hold leg in position
-            isRotating = false;
-            stopLeg();
-
-            // Reset Encoder positions to zero for ease of use
-            leftEncoder.setPosition(0.0);
-            rightEncoder.setPosition(0.0);
-
-            // Drive close enough to acquire targeting on AprilTag
-            pos = -8; // This is in feet
-            error = pos - leftEncoder.getPosition();
-
-            leftPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
-            rightPID.setReference(pos, CANSparkMax.ControlType.kSmartMotion);
-
-            stage = Math.abs(error) > 0.3 ? 4 : 5;
-
-          case 5: // Target and AutoAim/Approach goal
-            // Target and Acquire Cone Scoring pole using AprilTag or Retro Tape
-            // MAKE SURE THE SCORING PIPELINE MATCHES THE OBJECT FROM ABOVE
-            table.getEntry("pipeline").setNumber(SCORE_CUBE);  
-
-            if(Math.abs(txEntry.getDouble(0.0)) > 1 || 
-              Math.abs(tyEntry.getDouble(0.0)) > 1
-              )
-            {
-              autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
-              left = (steering_adjust - distance_adjust) * maxRPM; 
-              right = (-steering_adjust - distance_adjust) * maxRPM;         
-              leftPID.setReference(left, CANSparkMax.ControlType.kVelocity);
-              rightPID.setReference(right, CANSparkMax.ControlType.kVelocity);            }
-            else
-            {
-              stopLeg();
-              grabberSolenoid.set(true);
-              stage = 6;
-            }
-
-          default:
-            break;
-        }
-        break;
-
-      case "Dream": // Not yet implemented
-        break;
-
       default:
         DriverStation.reportError("Error Selecting Autonomous:  Selected Value is:  " + autoSelectionName, true);
         break;
     }
-    
-    steering_adjust = 0.0;
-    distance_adjust = 0.0;
   }
 
 
@@ -255,7 +187,7 @@ public class Robot extends TimedRobot
   {
     // Check Spotter Joystick for input so SPotter can modify Autonomous Setup
     joySpotter();
-    joyBackup();
+    //joyBackup();
 
     // Update Target Yaw to Current Yaw unless the robot is told to rotate
     if(isRotating)
@@ -283,26 +215,7 @@ public class Robot extends TimedRobot
     {
       myCompressor.enableDigital();
     }
-    SmartDashboard.putBoolean("Compressor", compressorState);
-
-    // For Testing Purposes
-    // NavX Info 
-    SmartDashboard.putNumber("NavX Yaw", Math.floor(navX2.getYaw()));
-    SmartDashboard.putNumber("NavX Pitch", Math.floor(navX2.getPitch()));
-    SmartDashboard.putNumber("NavX Roll", Math.floor(navX2.getRoll()));
-    
-    // // Limelight Info
-    //   //read values periodically
-    //   double tx = Math.floor(txEntry.getDouble(0.0));
-    //   double ty = Math.floor(tyEntry.getDouble(0.0));
-    //   double ta = Math.floor(taEntry.getDouble(0.0));
-    //   double tagID = Math.floor(table.getEntry("tid").getDouble(-1.0));
-
-    //   //post to smart dashboard periodically
-    //   SmartDashboard.putNumber("LimelightX", tx);
-    //   SmartDashboard.putNumber("LimelightY", ty);
-    //   SmartDashboard.putNumber("LimelightArea", ta);
-    //   SmartDashboard.putNumber("AprilTag Value", tagID);  
+    SmartDashboard.putBoolean("Compressor", compressorState);  
 
   }
 
@@ -315,19 +228,7 @@ public class Robot extends TimedRobot
   //   AutoAim, AutoBalance
   public void joyDriver()
   {
-    if(joyDriver.getRawAxis(3) < 0)
-    {   needBackup = true;  }
-    else if(isRotating)
-    {
-      // Ignore other inputs and Keep Rotating to last targetYaw
-    }
-    else if(joyDriver.getRawButton(1))
-    {
-      // Toggle Grabber
-      grabberSolenoid.set(!grabberSolenoid.get());
-      Timer.delay(0.25);
-    }
-    else if(joyDriver.getRawButton(2))
+    if(joyDriver.getRawButton(2))
     {
       // Automatically adjust Yaw and Distance to current Limelight pipeline Target
       autoAim(txEntry.getDouble(0.0), tyEntry.getDouble(0.0));
@@ -345,21 +246,33 @@ public class Robot extends TimedRobot
     else if(joyDriver.getRawButton(5))
     {
       // Rotates Directly to the left spinning Counter-Clockwise while holding button
-      targetYaw = 90;
+      targetYaw = -90;
       isRotating = true;
     }
     else if(joyDriver.getRawButton(6))
     {
       // Rotates Directly to the right spinning Clockwise while holding button
-      targetYaw = -90;
+      targetYaw = 90;
       isRotating = true;
+    }
+    else if(joyDriver.getRawButton(7))
+    {
+      grabberSolenoid.set(false);
+    }
+    else if(joyDriver.getRawButton(8))
+    {
+      grabberSolenoid.set(true);
+    }
+    else if(joyDriver.getRawButton(9))
+    {
+      slapReleaseServo.setAngle(LOCK_ANGLE);
     }
     else
     {
       lockLeg();
       stopLeg();
       isRotating = false;
-      needBackup = false;
+      //needBackup = false;
     }
   }
 
@@ -389,11 +302,6 @@ public class Robot extends TimedRobot
       // Hard-Multiple Auto Selection
       autoSelectionName = "Hard-Multiple";
     }
-    else if(joySpotter.getRawButton(5)) // Thumb button right
-    {
-      // Dream Auto Selection
-      autoSelectionName = "Dream";
-    }
     else if(joySpotter.getRawButton(6)) // Base Button Left Side Top
     {
       // Target Cube on High Loading Area Pipeline
@@ -404,39 +312,19 @@ public class Robot extends TimedRobot
       // Target Cube on High Loading Area Pipeline
       table.getEntry("pipeline").setNumber(CUBE);
     }
-    else if(joySpotter.getRawButton(8)) // Base Buttons Middle Left
-    {
-      // AprilTag Crosshair Calibrated for Scoring Cones to LEFT
-      table.getEntry("pipeline").setNumber(SCORE_CONE);
-    }
-    else if(joySpotter.getRawButtonPressed(9)) // Base Buttons Middle Right
+    else if(joySpotter.getRawButtonPressed(8)) // Base Buttons Middle Right
     {
       // AprilTag Crosshair Calibrated for Scoring Cones to LEFT
       table.getEntry("pipeline").setNumber(SCORE_CUBE);      
     }
-    else if(joySpotter.getRawButtonPressed(10)) // Base Buttons Right side bottom
+    else if(joySpotter.getRawButtonPressed(9)) // Base Buttons Right side bottom
     {
       // AprilTag Crosshair Calibrated for Scoring Cubes
       table.getEntry("pipeline").setNumber(LOAD_LOW);
     }
-    else if(joySpotter.getRawButton(11)) // Base Buttons Bottom Right side top
-    {
-      // AprilTag Crosshair Calibrated for Scoring Cubes
-      table.getEntry("pipeline").setNumber(LOAD_HIGH);
-    }
     else // No Assigned Button/Axis
     {
       // Do Nothing
-    }
-  }
-  
-  // The Backup Joystick is used if the gyro goes haywire and we need basic Tank Control over the robot
-  public void joyBackup()
-  {
-    if(joyBackup.getRawButton(2)) // A Button on Controller
-    {
-      // Recalibrate Gyro
-      navX2.reset();
     }
   }
   
@@ -448,7 +336,7 @@ public class Robot extends TimedRobot
 // Initialize Acceleration Curve settings
     // Logistic Curve values
     // acceleration_curvature = -0.1;
-    acceleration_midpoint = 100;
+    acceleration_midpoint = 50;
     populateArrayList();
 
     // Reset controller settings and set Idle Mode to Brake
@@ -553,51 +441,20 @@ public class Robot extends TimedRobot
   {
     joyDriver();
 
-    double currentYaw = navX2.getYaw()*Math.PI/180;
-    double fowardBackwardAxis = joyDriver.getRawAxis(1) * Math.cos(currentYaw);
-    double leftRightAxis = -joyDriver.getRawAxis(0) * Math.sin(currentYaw);
+    double fowardBackwardAxis = joyDriver.getRawAxis(1);
     double twistAxis = -joyDriver.getRawAxis(2);
 
     // Set deadbands
-    fowardBackwardAxis = fowardBackwardAxis < 0.05 && fowardBackwardAxis > -0.05 ? 0 : fowardBackwardAxis;
-    leftRightAxis = leftRightAxis < 0.05 && leftRightAxis > -0.05 ? 0 : leftRightAxis;
-    twistAxis = twistAxis < 0.1 && twistAxis > -0.1 ? 0 : twistAxis;
+    fowardBackwardAxis = fowardBackwardAxis < 0.05 && fowardBackwardAxis > -0.05 ? 0 : fowardBackwardAxis/2;
+    twistAxis = twistAxis < 0.2 && twistAxis > -0.2 ? 0 : twistAxis/2;
   
-    double appliedAxis = Math.abs(Math.sin(currentYaw)) >= Math.abs(Math.cos(currentYaw)) ? leftRightAxis : fowardBackwardAxis;
-    
-    double left = clamp((appliedAxis + twistAxis + steering_adjust - distance_adjust), -1, 1);
-    double right = clamp((appliedAxis - twistAxis - steering_adjust - distance_adjust), -1, 1);
+    double left = clamp((fowardBackwardAxis + twistAxis + steering_adjust - distance_adjust), -1, 1);
+    double right = clamp((fowardBackwardAxis - twistAxis - steering_adjust - distance_adjust), -1, 1);
   
-    // Checking to see if you need Backup
-    if(needBackup)
-    {
-      left = joyBackup.getRawAxis(1);
-      right = joyBackup.getRawAxis(3);
-    }
     updateMotorSetting(left, right);
     
     steering_adjust = 0.0;
     distance_adjust = 0.0;
-  }
-
-
-  /*
-   * Method that takes a Yaw Error (tx) and Roll Error (ty) and sets adjustment variables
-   * to bring robot to a position that will reduce those errors to zero
-   */
-  public void autoAim(double tx, double ty)
-  {
-    double heading_error = -tx;
-    double distance_error = -ty;
-
-    heading_error = heading_error > 30 ? 30 : heading_error;
-    heading_error = heading_error < -30 ? -30 : heading_error;
-
-    distance_error = distance_error > 25 ? 25 : distance_error;
-    distance_error = distance_error < -25 ? -25 : distance_error;
-    
-    steering_adjust = heading_error / 60;
-    distance_adjust = distance_error / 50;   
   }
 
   /*
@@ -613,59 +470,33 @@ public class Robot extends TimedRobot
     autoAim(angle - currentYaw, 0.0);
   }
 
-  // /*
-  //  * Method that takes a Yaw Error (tx) and Roll Error (ty) and sets adjustment variables
-  //  * to bring robot to a position that will reduce those errors to zero
-  //  */
-  // public void autoAim(double tx, double ty)
-  // {
-  //   double KpAim = 0.02;
-  //   double KpDistance = 0.02;
-  //   double min_aim_command = 0.02;
+  /*
+   * Method that takes a Yaw Error (tx) and Roll Error (ty) and sets adjustment variables
+   * to bring robot to a position that will reduce those errors to zero
+   */
+  public void autoAim(double tx, double ty)
+  {
+    double KpAim = 0.01;
+    double KpDistance = 0.01;
+    double min_aim_command = 0.01;
 
-  //   double heading_error = -tx;
-  //   double distance_error = -ty;
+    double heading_error = -tx;
+    double distance_error = -ty;
 
-  //   heading_error = heading_error > 30 ? 30 : heading_error;
-  //   heading_error = heading_error < -30 ? -30 : heading_error;
+    heading_error = heading_error > 25 ? 25 : heading_error;
+    heading_error = heading_error < -25 ? -25 : heading_error;
 
-  //   if (tx > 1.0)
-  //   {
-  //     steering_adjust = KpAim*heading_error - min_aim_command;
-  //   }
-  //   else if (tx < -1.0)
-  //   {
-  //     steering_adjust = KpAim*heading_error + min_aim_command;
-  //   }
+    if (tx > 1.0)
+    {
+      steering_adjust = KpAim*heading_error - min_aim_command;
+    }
+    else if (tx < -1.0)
+    {
+      steering_adjust = KpAim*heading_error + min_aim_command;
+    }
     
-  //   distance_adjust = KpDistance * distance_error;   
-  // }
-
-  // /*
-  //  * Method that takes a desired Yaw angle and uses the AutoAim method
-  //  * to rotate the robot to that desired Yaw Angle
-  //  * 
-  //  * NOTE: The angle should be between -180 and 180 since the NavX2-Micro
-  //  *       returns Yaw values in that range
-  //  */
-  // public void autoRotateToAngle(double angle)
-  // {
-  //   double currentYaw = navX2.getYaw();
-
-  //   SmartDashboard.putNumber("CurrentYaw", currentYaw);
-  //   SmartDashboard.putNumber("TargetYaw", angle);
-    
-    
-  //   if(currentYaw < angle - 5 || currentYaw > angle + 5)
-  //   {
-  //     autoAim(angle - currentYaw, 0.0);
-  //     //isRotating = true;
-  //   }
-  //   else
-  //   {
-  //     //isRotating = false;
-  //   }
-  // }
+    distance_adjust = KpDistance * distance_error;   
+  }
 
   /* 
    * Method that sets the distance adjustment variable based
@@ -724,19 +555,6 @@ public class Robot extends TimedRobot
       }
     }
 
-    // Limit speed during in-place rotations and when leg is unlocked
-    if(leftMotor1.getAppliedOutput() * rightMotor1.getAppliedOutput() < 0 || !legLocked.get())
-    {
-      if(index < maxTicks/3)
-      {
-        index = maxTicks/3;
-      }
-      else if(index > maxTicks*2/3)
-      {
-        index = maxTicks*2/3;
-      }
-    }
-
     return index;
 
   }
@@ -752,9 +570,11 @@ public class Robot extends TimedRobot
     double desired_setpoint_right = -steering_adjust + distance_adjust;
 
     // Get Desired Setpoints based on Stick 
-    desired_setpoint_left += (double)((int)(joyModX*10000))/10000;
-    desired_setpoint_right += (double)((int)(joyModY*10000))/10000;
-
+    if(!joyDriver.getRawButton(2))
+    {
+      desired_setpoint_left += (double)((int)(joyModX*10000))/10000;
+      desired_setpoint_right += (double)((int)(joyModY*10000))/10000;
+    }
 
     currentIndexLeft = updateMotorIndex(desired_setpoint_left, currentIndexLeft);
     currentIndexRight = updateMotorIndex(desired_setpoint_right, currentIndexRight);
@@ -785,18 +605,18 @@ public class Robot extends TimedRobot
   public void stopLeg()
   {
     valveServo.setAngle(CLOSE_ANGLE);
-    legSolenoid.set(false);
+    legSolenoid.set(true);
   }
   
   public void lockLeg()
   {
-    legReleaseServo_1.setAngle(LOCK_ANGLE);
+    legReleaseServo_1.setAngle(UNLOCK_ANGLE);
     legReleaseServo_2.setAngle(LOCK_ANGLE);
   }
 
   public void unlockLeg()
   {
-    legReleaseServo_1.setAngle(UNLOCK_ANGLE);
+    legReleaseServo_1.setAngle(LOCK_ANGLE);
     legReleaseServo_2.setAngle(UNLOCK_ANGLE);
   }
 
@@ -904,7 +724,7 @@ public class Robot extends TimedRobot
   // Adjustments will impact the acceleration curve so do 
   // so only if you also refactor the Curve function itself
 
-  private int maxTicks = 201;
+  private int maxTicks = 101;
   private int currentIndexLeft = maxTicks / 2;
   private int currentIndexRight = maxTicks / 2;
   private ArrayList<Double> settingsList;
@@ -916,25 +736,12 @@ public class Robot extends TimedRobot
   // Joysticks
   private Joystick joyDriver = new Joystick(0);
   private Joystick joySpotter = new Joystick(1);
-  private Joystick joyBackup = new Joystick(2); // This will be programmed to supply standard Tank Drive in case the Gyro fails or drifts too far
-  private boolean needBackup = false;
-
-  /*  Unused/Available Buttons/Axes on PS Controller
-      private final int BACK_BUTTON = 9;
-      private final int START_BUTTON = 10;
-      private final int LS_BUTTON = 11;
-      private final int RS_BUTTON = 12;
-      private final int LR_AXIS_LEFT_STICK = 0;
-      private final int LR_AXIS_RIGHT_STICK = 2;
-  */
 
   // Pipeline Constants
   private final int CONE = 0; // Retroreflective Threshold for Cones crosshair at bottom to put object in grabber
   private final int CUBE = 1; // Retroreflective Threshold for Cubes crosshair at bottom to put object in grabber
   private final int LOAD_LOW = 2; // AprilTag crosshair centered at height to represent distance for low loading zone
-  private final int LOAD_HIGH = 3; // AprilTag crosshair left at height to represent distance for loading to the right side of high loading zone
-  private final int SCORE_CUBE = 4; // AprilTag centered at height to represent distance for scoring on middle level cube area
-  private final int SCORE_CONE = 5; // Retroreflective Threshold for Retro-Tape on pole with crosshair centered at heigh to represent distance for scoring on middle level cone pole
+  private final int SCORE_CUBE = 3; // AprilTag centered at height to represent distance for scoring on middle level cube area
 
 
   // Servo Angle Constants
@@ -946,8 +753,8 @@ public class Robot extends TimedRobot
   
   // Robot Hardware
   Compressor myCompressor = new Compressor(PneumaticsModuleType.CTREPCM);
-  Solenoid grabberSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 6);
-  Solenoid legSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 0);
+  Solenoid grabberSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 0);
+  Solenoid legSolenoid = new Solenoid(PneumaticsModuleType.CTREPCM, 1);
   Servo valveServo = new Servo(0);
   Servo legReleaseServo_1 = new Servo(1);
   Servo legReleaseServo_2 = new Servo(2);
@@ -988,10 +795,9 @@ public class Robot extends TimedRobot
   private double kI = 1e-6;
   private double kD = 0.0;
   private double kIz = 1;
-  private double kFF = 0.000156; // Aggressive Acceleration...for more moderate acceleration use 0.000156
+  private double kFF = 0.000256; // Aggressive Acceleration...for more moderate acceleration use 0.000156
   private double kMaxOutput = 1;
   private double kMinOutput = -1;
-  private double maxRPM = 5700;
   private double maxVel = 5700;
   private double minVel = 0;
   private double maxAcc = 1500;
